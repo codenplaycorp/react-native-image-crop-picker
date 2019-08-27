@@ -34,33 +34,43 @@
 }
 
 - (ImageResult*) compressImageDimensions:(UIImage*)image
-                   compressImageMaxWidth:(CGFloat)maxWidth
-                  compressImageMaxHeight:(CGFloat)maxHeight
+                   compressImageMaxWidth:(CGFloat)maxWidthOld
+                  compressImageMaxHeight:(CGFloat)maxHeightOld
                               intoResult:(ImageResult*)result {
     
-    CGFloat oldWidth = image.size.width;
-    CGFloat oldHeight = image.size.height;
+    float actualHeight = image.size.height;
+    float actualWidth = image.size.width;
+    float maxHeight = 816.0;
+    float maxWidth = 612.0;
+    float imgRatio = actualWidth / actualHeight;
+    float maxRatio = maxWidth / maxHeight;
+    float compressionQuality = 0.85;
     
-    int newWidth = 0;
-    int newHeight = 0;
-    
-    if (maxWidth < maxHeight) {
-        newWidth = maxWidth;
-        newHeight = (oldHeight / oldWidth) * newWidth;
-    } else {
-        newHeight = maxHeight;
-        newWidth = (oldWidth / oldHeight) * newHeight;
+    if (actualHeight > maxHeight || actualWidth > maxWidth) {
+        if (imgRatio < maxRatio) {
+            imgRatio = maxHeight / actualHeight;
+            actualWidth = imgRatio * actualWidth;
+            actualHeight = maxHeight;
+        } else if (imgRatio > maxRatio) {
+            imgRatio = maxWidth / actualWidth;
+            actualHeight = imgRatio * actualHeight;
+            actualWidth = maxWidth;
+        } else {
+            actualHeight = maxHeight;
+            actualWidth = maxWidth;
+        }
     }
-    CGSize newSize = CGSizeMake(newWidth, newHeight);
     
-    UIGraphicsBeginImageContext(newSize);
-    [image drawInRect:CGRectMake(0, 0, newSize.width, newSize.height)];
-    UIImage *resizedImage = UIGraphicsGetImageFromCurrentImageContext();
+    CGRect rect = CGRectMake(0.0, 0.0, actualWidth, actualHeight);
+    UIGraphicsBeginImageContext(rect.size);
+    [image drawInRect:rect];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    NSData *resizedImage = UIImageJPEGRepresentation(img, compressionQuality);
     UIGraphicsEndImageContext();
     
-    result.width = [NSNumber numberWithFloat:newWidth];
-    result.height = [NSNumber numberWithFloat:newHeight];
-    result.image = resizedImage;
+    result.width = [NSNumber numberWithFloat:actualWidth];
+    result.height = [NSNumber numberWithFloat:actualHeight];
+    result.image = [UIImage imageWithData:resizedImage];
     return result;
 }
 
@@ -73,27 +83,15 @@
     result.image = image;
     result.mime = @"image/jpeg";
     
-    NSNumber *compressImageMaxWidth = [options valueForKey:@"compressImageMaxWidth"];
-    NSNumber *compressImageMaxHeight = [options valueForKey:@"compressImageMaxHeight"];
-    
-    // determine if it is necessary to resize image
-    BOOL shouldResizeWidth = (compressImageMaxWidth != nil && [compressImageMaxWidth floatValue] < image.size.width);
-    BOOL shouldResizeHeight = (compressImageMaxHeight != nil && [compressImageMaxHeight floatValue] < image.size.height);
-    
-    if (shouldResizeWidth || shouldResizeHeight) {
-        CGFloat maxWidth = compressImageMaxWidth != nil ? [compressImageMaxWidth floatValue] : image.size.width;
-        CGFloat maxHeight = compressImageMaxHeight != nil ? [compressImageMaxHeight floatValue] : image.size.height;
-        
-        [self compressImageDimensions:image
-                compressImageMaxWidth:maxWidth
-               compressImageMaxHeight:maxHeight
-                           intoResult:result];
-    }
+    [self compressImageDimensions:image
+            compressImageMaxWidth:0
+           compressImageMaxHeight:0
+                       intoResult:result];
     
     // parse desired image quality
     NSNumber *compressQuality = [options valueForKey:@"compressImageQuality"];
     if (compressQuality == nil) {
-        compressQuality = [NSNumber numberWithFloat:0.8];
+        compressQuality = [NSNumber numberWithFloat:0.85];
     }
     
     // convert image to jpeg representation
